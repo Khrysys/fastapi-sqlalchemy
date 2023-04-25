@@ -3,7 +3,7 @@ import os
 import click
 from flask import Flask
 from flask.cli import with_appcontext
-from flask_sqlalchemy import SQLAlchemy
+from fastapi import SQLAlchemy
 
 __version__ = (1, 0, 0, "dev")
 

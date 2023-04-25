@@ -7,7 +7,7 @@ from flask import redirect
 from flask import render_template
 from flask import request
 from flask import url_for
-from flask_sqlalchemy import SQLAlchemy
+from fastapi import SQLAlchemy
 
 app = Flask(__name__)
 app.secret_key = "Achee6phIexoh8dagiQuew0ephuga4Ih"

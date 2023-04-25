@@ -5,13 +5,12 @@ import typing as t
 from weakref import WeakKeyDictionary
 
 import sqlalchemy as sa
+from sqlalchemy.orm import DeclarativeMeta, scoped_session, sessionmaker, declarative_base, relationship, RelationshipProperty, dynamic_loader
+from sqlalchemy.exc import NoResultFound, MultipleResultsFound, UnboundExecutionError
 import sqlalchemy.event
 import sqlalchemy.exc
 import sqlalchemy.orm
-from flask import abort
-from flask import current_app
-from flask import Flask
-from flask import has_app_context
+from fastapi import HTTPException
 
 from .model import _QueryProperty
 from .model import DefaultMeta
@@ -117,12 +116,11 @@ class SQLAlchemy:
 
     def __init__(
         self,
-        app: Flask | None = None,
         *,
         metadata: sa.MetaData | None = None,
         session_options: dict[str, t.Any] | None = None,
         query_class: type[Query] = Query,
-        model_class: type[Model] | sa.orm.DeclarativeMeta = Model,
+        model_class: type[Model] | DeclarativeMeta = Model,
         engine_options: dict[str, t.Any] | None = None,
         add_models_to_shell: bool = True,
     ):
@@ -205,18 +203,9 @@ class SQLAlchemy:
         if engine_options is None:
             engine_options = {}
 
-        self._engine_options = engine_options
-        self._app_engines: WeakKeyDictionary[Flask, dict[str | None, sa.engine.Engine]]
-        self._app_engines = WeakKeyDictionary()
         self._add_models_to_shell = add_models_to_shell
 
-        if app is not None:
-            self.init_app(app)
-
     def __repr__(self) -> str:
-        if not has_app_context():
-            return f"<{type(self).__name__}>"
-
         message = f"{type(self).__name__} {self.engine.url}"
 
         if len(self.engines) > 1:
@@ -224,105 +213,9 @@ class SQLAlchemy:
 
         return f"<{message}>"
 
-    def init_app(self, app: Flask) -> None:
-        """Initialize a Flask application for use with this extension instance. This
-        must be called before accessing the database engine or session with the app.
-
-        This sets default configuration values, then configures the extension on the
-        application and creates the engines for each bind key. Therefore, this must be
-        called after the application has been configured. Changes to application config
-        after this call will not be reflected.
-
-        The following keys from ``app.config`` are used:
-
-        - :data:`.SQLALCHEMY_DATABASE_URI`
-        - :data:`.SQLALCHEMY_ENGINE_OPTIONS`
-        - :data:`.SQLALCHEMY_ECHO`
-        - :data:`.SQLALCHEMY_BINDS`
-        - :data:`.SQLALCHEMY_RECORD_QUERIES`
-        - :data:`.SQLALCHEMY_TRACK_MODIFICATIONS`
-
-        :param app: The Flask application to initialize.
-        """
-        if "sqlalchemy" in app.extensions:
-            raise RuntimeError(
-                "A 'SQLAlchemy' instance has already been registered on this Flask app."
-                " Import and use that instance instead."
-            )
-
-        app.extensions["sqlalchemy"] = self
-        app.teardown_appcontext(self._teardown_session)
-
-        if self._add_models_to_shell:
-            from .cli import add_models_to_shell
-
-            app.shell_context_processor(add_models_to_shell)
-
-        basic_uri: str | sa.engine.URL | None = app.config.setdefault(
-            "SQLALCHEMY_DATABASE_URI", None
-        )
-        basic_engine_options = self._engine_options.copy()
-        basic_engine_options.update(
-            app.config.setdefault("SQLALCHEMY_ENGINE_OPTIONS", {})
-        )
-        echo: bool = app.config.setdefault("SQLALCHEMY_ECHO", False)
-        config_binds: dict[
-            str | None, str | sa.engine.URL | dict[str, t.Any]
-        ] = app.config.setdefault("SQLALCHEMY_BINDS", {})
-        engine_options: dict[str | None, dict[str, t.Any]] = {}
-
-        # Build the engine config for each bind key.
-        for key, value in config_binds.items():
-            engine_options[key] = self._engine_options.copy()
-
-            if isinstance(value, (str, sa.engine.URL)):
-                engine_options[key]["url"] = value
-            else:
-                engine_options[key].update(value)
-
-        # Build the engine config for the default bind key.
-        if basic_uri is not None:
-            basic_engine_options["url"] = basic_uri
-
-        if "url" in basic_engine_options:
-            engine_options.setdefault(None, {}).update(basic_engine_options)
-
-        if not engine_options:
-            raise RuntimeError(
-                "Either 'SQLALCHEMY_DATABASE_URI' or 'SQLALCHEMY_BINDS' must be set."
-            )
-
-        engines = self._app_engines.setdefault(app, {})
-
-        # Dispose existing engines in case init_app is called again.
-        if engines:
-            for engine in engines.values():
-                engine.dispose()
-
-            engines.clear()
-
-        # Create the metadata and engine for each bind key.
-        for key, options in engine_options.items():
-            self._make_metadata(key)
-            options.setdefault("echo", echo)
-            options.setdefault("echo_pool", echo)
-            self._apply_driver_defaults(options, app)
-            engines[key] = self._make_engine(key, options, app)
-
-        if app.config.setdefault("SQLALCHEMY_RECORD_QUERIES", False):
-            from . import record_queries
-
-            for engine in engines.values():
-                record_queries._listen(engine)
-
-        if app.config.setdefault("SQLALCHEMY_TRACK_MODIFICATIONS", False):
-            from . import track_modifications
-
-            track_modifications._listen(self.session)
-
     def _make_scoped_session(
         self, options: dict[str, t.Any]
-    ) -> sa.orm.scoped_session[Session]:
+    ) -> scoped_session[Session]:
         """Create a :class:`sqlalchemy.orm.scoping.scoped_session` around the factory
         from :meth:`_make_session_factory`. The result is available as :attr:`session`.
 
@@ -345,11 +238,11 @@ class SQLAlchemy:
         """
         scope = options.pop("scopefunc", _app_ctx_id)
         factory = self._make_session_factory(options)
-        return sa.orm.scoped_session(factory, scope)
+        return scoped_session(factory, scope)
 
     def _make_session_factory(
         self, options: dict[str, t.Any]
-    ) -> sa.orm.sessionmaker[Session]:
+    ) -> sessionmaker[Session]:
         """Create the SQLAlchemy :class:`sqlalchemy.orm.sessionmaker` used by
         :meth:`_make_scoped_session`.
 
@@ -372,7 +265,7 @@ class SQLAlchemy:
         """
         options.setdefault("class_", Session)
         options.setdefault("query_cls", self.Query)
-        return sa.orm.sessionmaker(db=self, **options)
+        return sessionmaker(db=self, **options) # type: ignore
 
     def _teardown_session(self, exc: BaseException | None) -> None:
         """Remove the current session at the end of the request.
@@ -437,7 +330,7 @@ class SQLAlchemy:
         return Table
 
     def _make_declarative_base(
-        self, model: type[Model] | sa.orm.DeclarativeMeta
+        self, model: type[Model] | DeclarativeMeta
     ) -> type[t.Any]:
         """Create a SQLAlchemy declarative model class. The result is available as
         :attr:`Model`.
@@ -458,9 +351,9 @@ class SQLAlchemy:
         .. versionchanged:: 2.3
             ``model`` can be an already created declarative model class.
         """
-        if not isinstance(model, sa.orm.DeclarativeMeta):
+        if not isinstance(model, DeclarativeMeta):
             metadata = self._make_metadata(None)
-            model = sa.orm.declarative_base(
+            model = declarative_base(
                 metadata=metadata, cls=model, name="Model", metaclass=DefaultMeta
             )
 
@@ -473,11 +366,11 @@ class SQLAlchemy:
             model.metadata = self.metadatas[None]  # type: ignore[union-attr]
 
         model.query_class = self.Query
-        model.query = _QueryProperty()
+        model.query = _QueryProperty() # type: ignore
         model.__fsa__ = self
         return model
-
-    def _apply_driver_defaults(self, options: dict[str, t.Any], app: Flask) -> None:
+    '''
+    def _apply_driver_defaults(self, options: dict[str, t.Any]) -> None:
         """Apply driver-specific configuration to an engine.
 
         SQLite in-memory databases use ``StaticPool`` and disable ``check_same_thread``.
@@ -566,7 +459,7 @@ class SQLAlchemy:
         .. versionchanged:: 3.0
             Renamed from ``create_engine``, this method is internal.
         """
-        return sa.engine_from_config(options, prefix="")
+        return sa.engine_from_config(options, prefix="")'''
 
     @property
     def metadata(self) -> sa.MetaData:
@@ -636,6 +529,7 @@ class SQLAlchemy:
         value = self.session.get(entity, ident, **kwargs)
 
         if value is None:
+            return 
             abort(404, description=description)
 
         return value
@@ -654,7 +548,7 @@ class SQLAlchemy:
         value = self.session.execute(statement).scalar()
 
         if value is None:
-            abort(404, description=description)
+            raise HTTPException(404, {'detail': description})
 
         return value
 
@@ -672,8 +566,8 @@ class SQLAlchemy:
         """
         try:
             return self.session.execute(statement).scalar_one()
-        except (sa.exc.NoResultFound, sa.exc.MultipleResultsFound):
-            abort(404, description=description)
+        except (NoResultFound, MultipleResultsFound):
+            return HTTPException(404, {'detail': description})
 
     def paginate(
         self,
@@ -751,7 +645,7 @@ class SQLAlchemy:
                 if key is None:
                     message = f"'SQLALCHEMY_DATABASE_URI' config is not set. {message}"
 
-                raise sa.exc.UnboundExecutionError(message) from None
+                raise UnboundExecutionError(message) from None
 
             metadata = self.metadatas[key]
             getattr(metadata, op_name)(bind=engine)
@@ -828,7 +722,7 @@ class SQLAlchemy:
 
     def relationship(
         self, *args: t.Any, **kwargs: t.Any
-    ) -> sa.orm.RelationshipProperty[t.Any]:
+    ) -> RelationshipProperty[t.Any]:
         """A :func:`sqlalchemy.orm.relationship` that applies this extension's
         :attr:`Query` class for dynamic relationships and backrefs.
 
@@ -836,11 +730,11 @@ class SQLAlchemy:
             The :attr:`Query` class is set on ``backref``.
         """
         self._set_rel_query(kwargs)
-        return sa.orm.relationship(*args, **kwargs)
+        return relationship(*args, **kwargs)
 
     def dynamic_loader(
         self, argument: t.Any, **kwargs: t.Any
-    ) -> sa.orm.RelationshipProperty[t.Any]:
+    ) -> RelationshipProperty[t.Any]:
         """A :func:`sqlalchemy.orm.dynamic_loader` that applies this extension's
         :attr:`Query` class for relationships and backrefs.
 
@@ -848,11 +742,11 @@ class SQLAlchemy:
             The :attr:`Query` class is set on ``backref``.
         """
         self._set_rel_query(kwargs)
-        return sa.orm.dynamic_loader(argument, **kwargs)
+        return dynamic_loader(argument, **kwargs)
 
     def _relation(
         self, *args: t.Any, **kwargs: t.Any
-    ) -> sa.orm.RelationshipProperty[t.Any]:
+    ) -> RelationshipProperty[t.Any]:
         """A :func:`sqlalchemy.orm.relationship` that applies this extension's
         :attr:`Query` class for dynamic relationships and backrefs.
 
@@ -872,12 +766,12 @@ class SQLAlchemy:
             return self._relation
 
         if name == "event":
-            return sa.event
+            return sa.event # type: ignore
 
         if name.startswith("_"):
             raise AttributeError(name)
 
-        for mod in (sa, sa.orm):
+        for mod in (sa, sa.orm): # type: ignore
             if hasattr(mod, name):
                 return getattr(mod, name)
 

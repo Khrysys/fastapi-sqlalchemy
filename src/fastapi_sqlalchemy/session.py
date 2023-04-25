@@ -3,22 +3,20 @@ from __future__ import annotations
 import typing as t
 
 import sqlalchemy as sa
-import sqlalchemy.exc
-import sqlalchemy.orm
-from flask.globals import app_ctx
+from sqlalchemy.orm import Session
+from sqlalchemy.exc import UnboundExecutionError, NoInspectionAvailable
+from sqlalchemy.orm.exc import UnmappedClassError
 
 if t.TYPE_CHECKING:
     from .extension import SQLAlchemy
 
 
-class Session(sa.orm.Session):
+class Session(Session):
     """A SQLAlchemy :class:`~sqlalchemy.orm.Session` class that chooses what engine to
     use based on the bind key associated with the metadata associated with the thing
     being queried.
-
     To customize ``db.session``, subclass this and pass it as the ``class_`` key in the
     ``session_options`` to :class:`.SQLAlchemy`.
-
     .. versionchanged:: 3.0
         Renamed from ``SignallingSession``.
     """
@@ -37,13 +35,10 @@ class Session(sa.orm.Session):
     ) -> sa.engine.Engine | sa.engine.Connection:
         """Select an engine based on the ``bind_key`` of the metadata associated with
         the model or table being queried. If no bind key is set, uses the default bind.
-
         .. versionchanged:: 3.0.3
             Fix finding the bind for a joined inheritance model.
-
         .. versionchanged:: 3.0
             The implementation more closely matches the base SQLAlchemy implementation.
-
         .. versionchanged:: 2.1
             Support joining an external transaction.
         """
@@ -55,13 +50,13 @@ class Session(sa.orm.Session):
         if mapper is not None:
             try:
                 mapper = sa.inspect(mapper)
-            except sa.exc.NoInspectionAvailable as e:
+            except NoInspectionAvailable as e:
                 if isinstance(mapper, type):
-                    raise sa.orm.exc.UnmappedClassError(mapper) from e
+                    raise UnmappedClassError(mapper) from e
 
                 raise
 
-            engine = _clause_to_engine(mapper.local_table, engines)
+            engine = _clause_to_engine(mapper.local_table, engines) # type: ignore
 
             if engine is not None:
                 return engine
@@ -88,7 +83,7 @@ def _clause_to_engine(
         key = clause.metadata.info["bind_key"]
 
         if key not in engines:
-            raise sa.exc.UnboundExecutionError(
+            raise UnboundExecutionError(
                 f"Bind key '{key}' is not in 'SQLALCHEMY_BINDS' config."
             )
 

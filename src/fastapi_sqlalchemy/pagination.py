@@ -4,22 +4,16 @@ import typing as t
 from math import ceil
 
 import sqlalchemy as sa
-import sqlalchemy.orm
-from flask import abort
-from flask import request
-
+from fastapi import HTTPException
 
 class Pagination:
     """Apply an offset and limit to the query based on the current page and number of
     items per page.
-
     Don't create pagination objects manually. They are created by
     :meth:`.SQLAlchemy.paginate` and :meth:`.Query.paginate`.
-
     This is a base class, a subclass must implement :meth:`_query_items` and
     :meth:`_query_count`. Those methods will use arguments passed as ``kwargs`` to
     perform the queries.
-
     :param page: The current page, used to calculate the offset. Defaults to the
         ``page`` query arg during a request, or 1 otherwise.
     :param per_page: The maximum number of items on a page, used to calculate the
@@ -35,10 +29,8 @@ class Pagination:
         disabled and set manually if necessary.
     :param kwargs: Information about the query to paginate. Different subclasses will
         require different arguments.
-
     .. versionchanged:: 3.0
         Iterating over a pagination object iterates over its items.
-
     .. versionchanged:: 3.0
         Creating instances manually is not a public API.
     """
@@ -69,7 +61,7 @@ class Pagination:
         items = self._query_items()
 
         if not items and page != 1 and error_out:
-            abort(404)
+            raise HTTPException(404, {'detail', 'SQLAlchemy Error'})
 
         self.items: list[t.Any] = items
         """The items on the current page. Iterating over the pagination object is
@@ -92,43 +84,24 @@ class Pagination:
         max_per_page: int | None = None,
         error_out: bool = True,
     ) -> tuple[int, int]:
-        if request:
-            if page is None:
-                try:
-                    page = int(request.args.get("page", 1))
-                except (TypeError, ValueError):
-                    if error_out:
-                        abort(404)
+        if page is None:
+            page = 1
 
-                    page = 1
-
-            if per_page is None:
-                try:
-                    per_page = int(request.args.get("per_page", 20))
-                except (TypeError, ValueError):
-                    if error_out:
-                        abort(404)
-
-                    per_page = 20
-        else:
-            if page is None:
-                page = 1
-
-            if per_page is None:
-                per_page = 20
+        if per_page is None:
+            per_page = 20
 
         if max_per_page is not None:
             per_page = min(per_page, max_per_page)
 
         if page < 1:
             if error_out:
-                abort(404)
+                raise HTTPException(404, {'detail', 'SQLAlchemy Error'})
             else:
                 page = 1
 
         if per_page < 1:
             if error_out:
-                abort(404)
+                raise HTTPException(404, {'detail', 'SQLAlchemy Error'})
             else:
                 per_page = 20
 
@@ -137,31 +110,23 @@ class Pagination:
     @property
     def _query_offset(self) -> int:
         """The index of the first item to query, passed to ``offset()``.
-
         :meta private:
-
         .. versionadded:: 3.0
         """
         return (self.page - 1) * self.per_page
 
     def _query_items(self) -> list[t.Any]:
         """Execute the query to get the items on the current page.
-
         Uses init arguments stored in :attr:`_query_args`.
-
         :meta private:
-
         .. versionadded:: 3.0
         """
         raise NotImplementedError
 
     def _query_count(self) -> int:
         """Execute the query to get the total number of items.
-
         Uses init arguments stored in :attr:`_query_args`.
-
         :meta private:
-
         .. versionadded:: 3.0
         """
         raise NotImplementedError
@@ -170,7 +135,6 @@ class Pagination:
     def first(self) -> int:
         """The number of the first item on the page, starting from 1, or 0 if there are
         no items.
-
         .. versionadded:: 3.0
         """
         if len(self.items) == 0:
@@ -182,7 +146,6 @@ class Pagination:
     def last(self) -> int:
         """The number of the last item on the page, starting from 1, inclusive, or 0 if
         there are no items.
-
         .. versionadded:: 3.0
         """
         first = self.first
@@ -211,7 +174,6 @@ class Pagination:
 
     def prev(self, *, error_out: bool = False) -> Pagination:
         """Query the :class:`Pagination` object for the previous page.
-
         :param error_out: Abort with a ``404 Not Found`` error if no items are returned
             and ``page`` is not 1, or if ``page`` or ``per_page`` is less than 1, or if
             either are not ints.
@@ -241,7 +203,6 @@ class Pagination:
 
     def next(self, *, error_out: bool = False) -> Pagination:
         """Query the :class:`Pagination` object for the next page.
-
         :param error_out: Abort with a ``404 Not Found`` error if no items are returned
             and ``page`` is not 1, or if ``page`` or ``per_page`` is less than 1, or if
             either are not ints.
@@ -266,25 +227,18 @@ class Pagination:
     ) -> t.Iterator[int | None]:
         """Yield page numbers for a pagination widget. Skipped pages between the edges
         and middle are represented by a ``None``.
-
         For example, if there are 20 pages and the current page is 7, the following
         values are yielded.
-
         .. code-block:: python
-
             1, 2, None, 5, 6, 7, 8, 9, 10, 11, None, 19, 20
-
         :param left_edge: How many pages to show from the first page.
         :param left_current: How many pages to show left of the current page.
         :param right_current: How many pages to show right of the current page.
         :param right_edge: How many pages to show from the last page.
-
         .. versionchanged:: 3.0
             Improved efficiency of calculating what to yield.
-
         .. versionchanged:: 3.0
             ``right_current`` boundary is inclusive.
-
         .. versionchanged:: 3.0
             All parameters are keyword-only.
         """
@@ -324,7 +278,6 @@ class Pagination:
 class SelectPagination(Pagination):
     """Returned by :meth:`.SQLAlchemy.paginate`. Takes ``select`` and ``session``
     arguments in addition to the :class:`Pagination` arguments.
-
     .. versionadded:: 3.0
     """
 
@@ -336,7 +289,7 @@ class SelectPagination(Pagination):
 
     def _query_count(self) -> int:
         select = self._query_args["select"]
-        sub = select.options(sa.orm.lazyload("*")).order_by(None).subquery()
+        sub = select.options(sa.orm.lazyload("*")).order_by(None).subquery() # type: ignore
         session = self._query_args["session"]
         out = session.execute(sa.select(sa.func.count()).select_from(sub)).scalar()
         return out  # type: ignore[no-any-return]
@@ -345,7 +298,6 @@ class SelectPagination(Pagination):
 class QueryPagination(Pagination):
     """Returned by :meth:`.Query.paginate`. Takes a ``query`` argument in addition to
     the :class:`Pagination` arguments.
-
     .. versionadded:: 3.0
     """
 

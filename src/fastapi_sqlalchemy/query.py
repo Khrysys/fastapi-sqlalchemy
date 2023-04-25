@@ -3,20 +3,17 @@ from __future__ import annotations
 import typing as t
 
 import sqlalchemy as sa
-import sqlalchemy.exc
+from sqlalchemy.exc import NoResultFound, MultipleResultsFound
 import sqlalchemy.orm
-from flask import abort
 
 from .pagination import Pagination
 from .pagination import QueryPagination
-
+from fastapi import HTTPException
 
 class Query(sa.orm.Query):  # type: ignore[type-arg]
     """SQLAlchemy :class:`~sqlalchemy.orm.query.Query` subclass with some extra methods
     useful for querying in a web application.
-
     This is the default query class for :attr:`.Model.query`.
-
     .. versionchanged:: 3.0
         Renamed to ``Query`` from ``BaseQuery``.
     """
@@ -24,42 +21,38 @@ class Query(sa.orm.Query):  # type: ignore[type-arg]
     def get_or_404(self, ident: t.Any, description: str | None = None) -> t.Any:
         """Like :meth:`~sqlalchemy.orm.Query.get` but aborts with a ``404 Not Found``
         error instead of returning ``None``.
-
         :param ident: The primary key to query.
         :param description: A custom message to show on the error page.
         """
         rv = self.get(ident)
 
         if rv is None:
-            abort(404, description=description)
+            raise HTTPException(404, {'detail': description})
 
         return rv
 
     def first_or_404(self, description: str | None = None) -> t.Any:
         """Like :meth:`~sqlalchemy.orm.Query.first` but aborts with a ``404 Not Found``
         error instead of returning ``None``.
-
         :param description: A custom message to show on the error page.
         """
         rv = self.first()
 
         if rv is None:
-            abort(404, description=description)
+            raise HTTPException(404, {'detail': description})
 
         return rv
 
     def one_or_404(self, description: str | None = None) -> t.Any:
         """Like :meth:`~sqlalchemy.orm.Query.one` but aborts with a ``404 Not Found``
         error instead of raising ``NoResultFound`` or ``MultipleResultsFound``.
-
         :param description: A custom message to show on the error page.
-
         .. versionadded:: 3.0
         """
         try:
             return self.one()
-        except (sa.exc.NoResultFound, sa.exc.MultipleResultsFound):
-            abort(404, description=description)
+        except (NoResultFound, MultipleResultsFound):
+            raise HTTPException(404, {'detail': description})
 
     def paginate(
         self,
@@ -72,7 +65,6 @@ class Query(sa.orm.Query):  # type: ignore[type-arg]
     ) -> Pagination:
         """Apply an offset and limit to the query based on the current page and number
         of items per page, returning a :class:`.Pagination` object.
-
         :param page: The current page, used to calculate the offset. Defaults to the
             ``page`` query arg during a request, or 1 otherwise.
         :param per_page: The maximum number of items on a page, used to calculate the
@@ -86,13 +78,10 @@ class Query(sa.orm.Query):  # type: ignore[type-arg]
         :param count: Calculate the total number of values by issuing an extra count
             query. For very complex queries this may be inaccurate or slow, so it can be
             disabled and set manually if necessary.
-
         .. versionchanged:: 3.0
             All parameters are keyword-only.
-
         .. versionchanged:: 3.0
             The ``count`` query is more efficient.
-
         .. versionchanged:: 3.0
             ``max_per_page`` defaults to 100.
         """
