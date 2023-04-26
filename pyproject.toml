@@ -3,13 +3,13 @@ name = "fastapi-sqlalchemy"
 version = "0.1.0"
 description = ""
 authors = ["Michael Piccirillo <70709374+Khrysys@users.noreply.github.com>"]
-readme = "README.md"
-packages = [{include = "fastapi_sqlalchemy"}]
+packages = [{include = "src/fastapi_sqlalchemy"}]
 
 [tool.poetry.dependencies]
 python = "^3.7"
 SQLAlchemy = "^2.0.10"
 fastapi = "^0.95.1"
+asyncpg = "^0.27.0"
 
 [build-system]
 requires = ["poetry-core"]
