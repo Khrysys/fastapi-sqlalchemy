@@ -2,15 +2,18 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import (AsyncEngine, AsyncSession, async_sessionmaker,
                                     create_async_engine)
-from sqlalchemy import *
+from sqlalchemy import MetaData, Table, Column, Integer, Text, String, DateTime, Date, select
+from sqlalchemy.sql import Select
 from .model import Model
-from .exeptions import *
+from .exceptions import *
+from .migrate import Migration
 
 
 class SQLAlchemy:
     __engine__: AsyncEngine
     session: AsyncSession
     __metadata__: MetaData
+    migration: Migration
     
     Model = Model
     Table = Table
@@ -33,6 +36,7 @@ class SQLAlchemy:
         )
         self.session = self.__sessionmaker__()
         self.__metadata__ = Model.metadata
+        self.migration = Migration(kwargs.get('migration_options', {}))
         
     def create_all(self):
         self.__metadata__.create_all(bind=self.__engine__)

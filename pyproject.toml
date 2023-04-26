@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "fastapi-sql"
-version = "0.1.0"
+version = "0.1.2"
 description = ""
 authors = ["Michael Piccirillo <70709374+Khrysys@users.noreply.github.com>"]
 
@@ -9,6 +9,7 @@ python = "^3.7"
 SQLAlchemy = "^2.0.10"
 fastapi = "^0.95.1"
 asyncpg = "^0.27.0"
+alembic = "^1.10.4"
 
 [build-system]
 requires = ["poetry-core"]
