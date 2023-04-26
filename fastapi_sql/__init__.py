@@ -37,5 +37,5 @@ class SQLAlchemy:
     def create_all(self):
         self.__metadata__.create_all(bind=self.__engine__)
         
-        
-        
+    def select(self, cls: type[Model]) -> Select[Any]:
+        return select(cls)
