@@ -1,6 +1,7 @@
 from re import sub
 
 from sqlalchemy.orm import DeclarativeBase, DeclarativeMeta, declared_attr
+from sqlalchemy import Column
 
 
 class _Base(DeclarativeBase):
@@ -13,4 +14,5 @@ def camel_to_snake_case(name: str) -> str:
 
 class Model(_Base):
     __tablename__ = f'__{camel_to_snake_case(__name__)}__'
+    id = Column('id', nullable=False, primary_key=True)
 
