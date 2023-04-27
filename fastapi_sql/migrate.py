@@ -3,7 +3,7 @@ from typing import Any
 
 class Migration:
     def __init__(self, init_options: 'dict[str,Any]' = {}):
-        argv = ['init']
+        argv = ['init', 'migrations']
         argv.extend(init_options)
         main(argv)
         

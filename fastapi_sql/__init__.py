@@ -1,12 +1,15 @@
-from typing import Any
+from typing import Any, ClassVar
 
 from sqlalchemy.ext.asyncio import (AsyncEngine, AsyncSession, async_sessionmaker,
                                     create_async_engine)
 from sqlalchemy import MetaData, Table, Column, Integer, Text, String, DateTime, Date, select
 from sqlalchemy.sql import Select
-from .model import Model
-from .exceptions import *
+from sqlalchemy.orm import declarative_base
+from .model import Model as DefaultModel, DefaultMeta
 from .migrate import Migration
+from asyncio import run
+from fastapi import FastAPI, Request
+from .middleware import Middleware
 
 
 class SQLAlchemy:
@@ -14,8 +17,18 @@ class SQLAlchemy:
     session: AsyncSession
     __metadata__: MetaData
     migration: Migration
+    __naming_conventions__: 'dict[str, str]' = {
+        "ix": "ix_%(column_0_label)s",
+        "uq": "uq_%(table_name)s_%(column_0_name)s",
+        "ck": "ck_%(table_name)s_%(constraint_name)s",
+        "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
+        "pk": "pk_%(table_name)s"
+    }
+    __closed__ = False
     
-    Model = Model
+    middleware = Middleware
+    
+    Model: DefaultModel
     Table = Table
     
     Column = Column
@@ -25,8 +38,7 @@ class SQLAlchemy:
     DateTime = DateTime
     Date = Date
     
-    def __init__(self, *, database_uri: str, session_options: 'dict[str,Any]', 
-                 model_class: type[Model] = Model, **kwargs
+    def __init__(self, app: FastAPI = None, *, database_uri: str, session_options: 'dict[str,Any]' = {}, **kwargs
     ):
         self.__engine__ = create_async_engine(database_uri)
         self.__sessionmaker__ = async_sessionmaker(
@@ -34,12 +46,28 @@ class SQLAlchemy:
                     autoflush=session_options.get('session_autoflush', True),
                     expire_on_commit=session_options.get('expire_on_commit', True)
         )
-        self.session = self.__sessionmaker__()
-        self.__metadata__ = Model.metadata
-        self.migration = Migration(kwargs.get('migration_options', {}))
+        if kwargs.get('naming_convention') is not None:
+            self.__naming_conventions__ = kwargs.get('naming_convention', {})
+        self.__metadata__ = MetaData(naming_convention=self.__naming_conventions__)
+        self.Model = self._make_declarative_base() # type: ignore
+        if kwargs.get('migrate', False):
+            self.migration = Migration(kwargs.get('migration_options', {}))
+            
+        if app is not None:
+            app.add_middleware(self.middleware, sqlalchemy=self)
+            
         
-    def create_all(self):
-        self.__metadata__.create_all(bind=self.__engine__)
+    async def create_all(self):
+        async with self.__engine__.begin() as conn:
+            await conn.run_sync(self.__metadata__.create_all)
         
-    def select(self, cls: type[Model]) -> Select[Any]:
-        return select(cls)
+    select:Select[Any] = select # type: ignore
+    
+    def _make_declarative_base(self) -> 'type[DefaultModel]':
+        model = declarative_base(
+            metadata=self.__metadata__,
+            cls=DefaultModel,
+            name="Model",
+            metaclass=DefaultMeta # type: ignore
+        )
+        return model
