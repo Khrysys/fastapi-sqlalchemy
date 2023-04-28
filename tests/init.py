@@ -1,10 +1,11 @@
 from fastapi_sql import SQLAlchemy
 from asyncio import run
 from fastapi import FastAPI
+from uvicorn import Server, Config
 
 app = FastAPI()
 
-db = SQLAlchemy(database_uri='postgresql+asyncpg://postgres:postgres@localhost:5432/db-fastinni')
+db = SQLAlchemy(app=app, database_uri='postgresql+asyncpg://postgres:postgres@localhost:5432/db-fastinni')
 
 class User(db.Model): # type: ignore
     __tablename__ = '__user__'
@@ -14,3 +15,6 @@ class User(db.Model): # type: ignore
  
 run(db.create_all())
 
+
+server = Server(Config(app=app))
+run(server.serve())
