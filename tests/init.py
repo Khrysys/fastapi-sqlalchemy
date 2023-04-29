@@ -2,6 +2,7 @@ from fastapi_sql import SQLAlchemy
 from asyncio import run
 from fastapi import FastAPI
 from uvicorn import Server, Config
+from os import path
 
 app = FastAPI()
 
@@ -12,9 +13,12 @@ class User(db.Model): # type: ignore
     id = db.Column('id', db.Integer, primary_key=True)
     username = db.Column('username', db.String(16))
    
- 
-run(db.create_all())
+if not path.exists('migrations'):
+    db.migration.init() 
+db.migration.revision()
+db.migration.upgrade()
 
+run(db.create_all())
 
 server = Server(Config(app=app))
 run(server.serve())

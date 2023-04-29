@@ -1,4 +1,4 @@
-from typing import Any, ClassVar
+from typing import Any, Type
 
 from sqlalchemy.ext.asyncio import (AsyncEngine, AsyncSession, async_sessionmaker,
                                     create_async_engine)
@@ -7,8 +7,7 @@ from sqlalchemy.sql import Select
 from sqlalchemy.orm import declarative_base
 from .model import Model as DefaultModel, DefaultMeta
 from .migrate import Migration
-from asyncio import run
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from .middleware import Middleware
 
 
@@ -16,7 +15,7 @@ class SQLAlchemy:
     __engine__: AsyncEngine
     session: AsyncSession
     __metadata__: MetaData
-    migration: Migration
+    migration = Migration
     __naming_conventions__: 'dict[str, str]' = {
         "ix": "ix_%(column_0_label)s",
         "uq": "uq_%(table_name)s_%(column_0_name)s",
@@ -24,7 +23,6 @@ class SQLAlchemy:
         "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
         "pk": "pk_%(table_name)s"
     }
-    __closed__ = False
     
     middleware = Middleware
     
@@ -50,13 +48,14 @@ class SQLAlchemy:
             self.__naming_conventions__ = kwargs.get('naming_convention', {})
         self.__metadata__ = MetaData(naming_convention=self.__naming_conventions__)
         self.Model = self._make_declarative_base() # type: ignore
-        if kwargs.get('migrate', False):
-            self.migration = Migration(kwargs.get('migration_options', {}))
-            
+        self.__engine_uri__ = database_uri
+        self.migration.cfg.set_main_option('sqlalchemy.url', database_uri)
         if app is not None:
             app.add_middleware(self.middleware, sqlalchemy=self)
             
-        
+    def init_app(self, app: FastAPI):
+        app.add_middleware(self.middleware, sqlalchemy=self)
+    
     async def create_all(self):
         async with self.__engine__.begin() as conn:
             await conn.run_sync(self.__metadata__.create_all)

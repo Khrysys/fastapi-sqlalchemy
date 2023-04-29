@@ -1,32 +1,56 @@
 from alembic.config import main
+from alembic import command
+from alembic.config import Config
 from typing import Any
+import os
 
 class Migration:
-    def __init__(self, init_options: 'dict[str,Any]' = {}):
-        argv = ['init', 'migrations']
-        argv.extend(init_options)
-        main(argv)
+    sqlalchemy = None
+    cfg = Config()
+    
+    @staticmethod
+    def init():
+        command.init(Migration.cfg, 'migrations', package=True, template='async')
+        Migration.cfg.set_main_option('script_location', 'migrations')
         
-    def migrate(self, options: 'dict[str,Any]' = {}):
-        argv = ['migrate']
-        argv.extend(options)
-        main(argv)
+    @staticmethod
+    def revision():
+        Migration.cfg.set_main_option('script_location', 'migrations')
+        command.revision(Migration.cfg)
         
-    def revision(self, options: 'dict[str,Any]' = {}, revision_name:str = 'Commit'):
-        argv = ['revision', revision_name]
-        argv.extend(options)
-        main(argv)
+    @staticmethod
+    def upgrade():
+        Migration.cfg.set_main_option('script_location', 'migrations')
+        command.upgrade(Migration.cfg, 'head')
         
-    def upgrade(self, options: 'dict[str,Any]' = {}, branch:str = 'Head'):
-        self.revision()
-        argv = ['upgrade', branch]
-        argv.extend(options)
-        main(argv)
+    @staticmethod
+    def branches():
+        Migration.cfg.set_main_option('script_location', 'migrations')
+        command.branches(Migration.cfg)
         
-    def current(self):
-        main(['current'])
+    @staticmethod
+    def stamp():
+        Migration.cfg.set_main_option('script_location', 'migrations')
+        command.stamp(Migration.cfg)
+    
+    @staticmethod
+    def check():
+        Migration.cfg.set_main_option('script_location', 'migrations')
+        command.check(Migration.cfg)
         
-    def history(self, options: 'dict[str,Any]' = {}):
-        argv = ['history']
-        argv.extend(options)
-        main(argv)
+    @staticmethod
+    def edit():
+        Migration.cfg.set_main_option('script_location', 'migrations')
+        command.edit(Migration.cfg)
+    
+    @staticmethod
+    def downgrade():
+        Migration.cfg.set_main_option('script_location', 'migrations')
+        command.downgrade(Migration.cfg)
+        
+    @staticmethod
+    def current():
+        Migration.cfg.set_main_option('script_location', 'migrations')
+        command.current(Migration.cfg)
+        
+    

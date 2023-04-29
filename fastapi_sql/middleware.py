@@ -2,7 +2,6 @@ from fastapi import Request, Response
 from typing import Optional, Callable, Awaitable, Any
 from starlette.types import ASGIApp
 from starlette.middleware.base import BaseHTTPMiddleware
-from fastapi import FastAPI
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 
