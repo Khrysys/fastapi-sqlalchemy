@@ -6,7 +6,7 @@ from os import path
 
 app = FastAPI()
 
-db = SQLAlchemy(app=app, database_uri='postgresql+asyncpg://postgres:postgres@localhost:5432/db-fastinni')
+db = SQLAlchemy(app=app, database_uri='postgresql+asyncpg://postgres:postgres@localhost:5432/db-fastapi-sql')
 
 class User(db.Model): # type: ignore
     __tablename__ = '__user__'

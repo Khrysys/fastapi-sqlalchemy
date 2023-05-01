@@ -10,8 +10,7 @@ class Migration:
     
     @staticmethod
     def init():
-        command.init(Migration.cfg, 'migrations', package=True, template='async')
-        Migration.cfg.set_main_option('script_location', 'migrations')
+        command.init(Migration.cfg, 'migrations', template='async', package=True)
         
     @staticmethod
     def revision():

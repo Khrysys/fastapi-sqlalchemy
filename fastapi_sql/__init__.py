@@ -50,6 +50,7 @@ class SQLAlchemy:
         self.Model = self._make_declarative_base() # type: ignore
         self.__engine_uri__ = database_uri
         self.migration.cfg.set_main_option('sqlalchemy.url', database_uri)
+        self.migration.cfg.config_file_name = 'alembic.ini'
         if app is not None:
             app.add_middleware(self.middleware, sqlalchemy=self)
             
