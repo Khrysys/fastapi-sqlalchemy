@@ -5,7 +5,7 @@ from sqlalchemy import (Boolean, Column, Date, DateTime, ForeignKey, Integer,
                         MetaData, String, Text, select)
 from sqlalchemy.ext.asyncio import (AsyncEngine, AsyncSession,
                                     async_sessionmaker, create_async_engine)
-from sqlalchemy.orm import declarative_base, relationship
+from sqlalchemy.orm import declarative_base, relationship, RelationshipProperty
 from sqlalchemy.sql import Select
 
 from .middleware import Middleware
@@ -39,7 +39,16 @@ class SQLAlchemy:
     String = String
     DateTime = DateTime
     Date = Date
-    relationship = relationship
+    def relationship(
+        self, *args: Any, **kwargs: Any
+    ) -> RelationshipProperty[Any]:
+        """A :func:`sqlalchemy.orm.relationship` that applies this extension's
+        :attr:`Query` class for dynamic relationships and backrefs.
+        .. versionchanged:: 3.0
+            The :attr:`Query` class is set on ``backref``.
+        """
+        self._set_rel_query(kwargs)
+        return relationship(*args, **kwargs)
     
     def __init__(self, app: FastAPI = None, *, database_uri: str, session_options: 'dict[str,Any]' = {}, **kwargs
     ):

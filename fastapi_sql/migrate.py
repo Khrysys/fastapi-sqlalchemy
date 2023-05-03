@@ -52,4 +52,12 @@ class Migration:
         Migration.cfg.set_main_option('script_location', 'migrations')
         command.current(Migration.cfg)
         
+    @staticmethod
+    def check():
+        Migration.cfg.set_main_option('script_location', 'migrations')
+        try:
+            command.check(Migration.cfg)
+            return True
+        except:
+            return False
     

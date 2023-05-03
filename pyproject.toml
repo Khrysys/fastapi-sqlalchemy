@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "fastapi-sql"
-version = "0.3.4"
+version = "0.3.5"
 description = ""
 authors = ["Michael Piccirillo <70709374+Khrysys@users.noreply.github.com>"]
 

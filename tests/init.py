@@ -13,14 +13,13 @@ class User(db.Model): # type: ignore
     id = db.Column('id', db.Integer, primary_key=True)
     username = db.Column('username', db.String(16))
    
-async def upgrade_db():
-    await db.create_all()
-    if not path.exists('migrations'):
-        db.migration.init() 
+run(db.create_all())
+if not path.exists('migrations'):
+    db.migration.init() 
+
+if db.migration.check():
     db.migration.revision()
     db.migration.upgrade()
-
-run(upgrade_db())
 
 server = Server(Config(app=app))
 run(server.serve())
