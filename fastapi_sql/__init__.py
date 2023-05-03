@@ -2,7 +2,7 @@ from typing import Any, Type
 
 from sqlalchemy.ext.asyncio import (AsyncEngine, AsyncSession, async_sessionmaker,
                                     create_async_engine)
-from sqlalchemy import MetaData, Table, Column, Integer, Text, String, DateTime, Date, select
+from sqlalchemy import MetaData, Table, Column, Integer, Text, String, DateTime, Date, select, ForeignKey
 from sqlalchemy.sql import Select
 from sqlalchemy.orm import declarative_base
 from .model import Model as DefaultModel, DefaultMeta
@@ -14,7 +14,7 @@ from .middleware import Middleware
 class SQLAlchemy:
     __engine__: AsyncEngine
     session: AsyncSession
-    __metadata__: MetaData
+    __metadata__: MetaData = None
     migration = Migration
     __naming_conventions__: 'dict[str, str]' = {
         "ix": "ix_%(column_0_label)s",
@@ -27,7 +27,7 @@ class SQLAlchemy:
     middleware = Middleware
     
     Model: DefaultModel
-    Table = Table
+    ForeignKey = ForeignKey
     
     Column = Column
     Integer = Integer
@@ -46,7 +46,8 @@ class SQLAlchemy:
         )
         if kwargs.get('naming_convention') is not None:
             self.__naming_conventions__ = kwargs.get('naming_convention', {})
-        self.__metadata__ = MetaData(naming_convention=self.__naming_conventions__)
+        if SQLAlchemy.__metadata__ is None:
+            SQLAlchemy.__metadata__ = MetaData(naming_convention=self.__naming_conventions__)
         self.Model = self._make_declarative_base() # type: ignore
         self.__engine_uri__ = database_uri
         self.migration.cfg.set_main_option('sqlalchemy.url', database_uri)
