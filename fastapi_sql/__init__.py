@@ -1,14 +1,17 @@
 from typing import Any, Type
 
-from sqlalchemy.ext.asyncio import (AsyncEngine, AsyncSession, async_sessionmaker,
-                                    create_async_engine)
-from sqlalchemy import MetaData, Table, Column, Integer, Text, String, DateTime, Date, select, ForeignKey
-from sqlalchemy.sql import Select
-from sqlalchemy.orm import declarative_base
-from .model import Model as DefaultModel, DefaultMeta
-from .migrate import Migration
 from fastapi import FastAPI
+from sqlalchemy import (Boolean, Column, Date, DateTime, ForeignKey, Integer,
+                        MetaData, String, Text, select)
+from sqlalchemy.ext.asyncio import (AsyncEngine, AsyncSession,
+                                    async_sessionmaker, create_async_engine)
+from sqlalchemy.orm import declarative_base, relationship
+from sqlalchemy.sql import Select
+
 from .middleware import Middleware
+from .migrate import Migration
+from .model import DefaultMeta
+from .model import Model as DefaultModel
 
 
 class SQLAlchemy:
@@ -30,11 +33,13 @@ class SQLAlchemy:
     ForeignKey = ForeignKey
     
     Column = Column
+    Boolean = Boolean
     Integer = Integer
     Text = Text
     String = String
     DateTime = DateTime
     Date = Date
+    relationship = relationship
     
     def __init__(self, app: FastAPI = None, *, database_uri: str, session_options: 'dict[str,Any]' = {}, **kwargs
     ):
