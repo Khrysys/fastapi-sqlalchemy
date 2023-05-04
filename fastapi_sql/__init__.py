@@ -1,12 +1,13 @@
 from typing import Any, Type
 
-from fastapi import FastAPI
 import sqlalchemy as sa
+from fastapi import FastAPI
 from sqlalchemy import (Boolean, Column, Date, DateTime, ForeignKey, Integer,
                         MetaData, String, Text, select)
 from sqlalchemy.ext.asyncio import (AsyncEngine, AsyncSession,
                                     async_sessionmaker, create_async_engine)
-from sqlalchemy.orm import RelationshipProperty, declarative_base, relationship
+from sqlalchemy.orm import (RelationshipProperty, backref, declarative_base,
+                            relationship)
 from sqlalchemy.sql import Select
 
 from .middleware import Middleware
@@ -33,6 +34,7 @@ class SQLAlchemy:
     
     Model: DefaultModel
     ForeignKey = ForeignKey
+    backref = backref
     
     Column = Column
     Boolean = Boolean
@@ -41,6 +43,7 @@ class SQLAlchemy:
     String = String
     DateTime = DateTime
     Date = Date
+    
     def relationship(
         self, *args: Any, **kwargs: Any
     ) -> RelationshipProperty[Any]:
@@ -49,7 +52,6 @@ class SQLAlchemy:
         .. versionchanged:: 3.0
             The :attr:`Query` class is set on ``backref``.
         """
-        self._set_rel_query(kwargs)
         return relationship(*args, **kwargs)
     
     def __init__(self, app: FastAPI = None, *, database_uri: str, session_options: 'dict[str,Any]' = {}, **kwargs
