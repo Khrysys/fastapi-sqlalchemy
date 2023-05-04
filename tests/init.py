@@ -12,12 +12,22 @@ class User(db.Model): # type: ignore
     __tablename__ = '__user__'
     id = db.Column('id', db.Integer, primary_key=True)
     username = db.Column('username', db.String(16))
+    
+class Role(db.Model): #type: ignore
+    __tablename__ = 'role'
+    id = db.Column('id', db.Integer(), primary_key=True)
+   
+roles_users = db.Table(
+    'roles_users',
+    db.Column('user_id', db.Integer(), db.ForeignKey('__user__.id')),
+    db.Column('role_id', db.Integer(), db.ForeignKey('role.id'))
+)
    
 run(db.create_all())
 if not path.exists('migrations'):
     db.migration.init() 
 
-if db.migration.check():
+if not db.migration.check():
     db.migration.revision()
     db.migration.upgrade()
 

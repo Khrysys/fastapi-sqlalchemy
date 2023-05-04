@@ -1,17 +1,19 @@
 from typing import Any, Type
 
 from fastapi import FastAPI
+import sqlalchemy as sa
 from sqlalchemy import (Boolean, Column, Date, DateTime, ForeignKey, Integer,
                         MetaData, String, Text, select)
 from sqlalchemy.ext.asyncio import (AsyncEngine, AsyncSession,
                                     async_sessionmaker, create_async_engine)
-from sqlalchemy.orm import declarative_base, relationship, RelationshipProperty
+from sqlalchemy.orm import RelationshipProperty, declarative_base, relationship
 from sqlalchemy.sql import Select
 
 from .middleware import Middleware
 from .migrate import Migration
 from .model import DefaultMeta
 from .model import Model as DefaultModel
+from .table import _Table
 
 
 class SQLAlchemy:
@@ -63,6 +65,7 @@ class SQLAlchemy:
         if SQLAlchemy.__metadata__ is None:
             SQLAlchemy.__metadata__ = MetaData(naming_convention=self.__naming_conventions__)
         self.Model = self._make_declarative_base() # type: ignore
+        self.Table = self._make_table_class()
         self.__engine_uri__ = database_uri
         self.migration.cfg.set_main_option('sqlalchemy.url', database_uri)
         self.migration.cfg.config_file_name = 'alembic.ini'
@@ -86,3 +89,18 @@ class SQLAlchemy:
             metaclass=DefaultMeta # type: ignore
         )
         return model
+    
+    def _make_table_class(self):
+        class Table(_Table):
+            def __new__(
+                cls, *args: Any, bind_key: str = None, **kwargs: Any
+            ) -> sa.Table:
+                # If a metadata arg is passed, go directly to the base Table. Also do
+                # this for no args so the correct error is shown.
+                if not args or (len(args) >= 2 and isinstance(args[1], MetaData)):
+                    return super().__new__(cls, *args, **kwargs)
+
+                metadata = self.__metadata__
+                return super().__new__(cls, *[args[0], metadata, *args[1:]], **kwargs)
+
+        return Table
